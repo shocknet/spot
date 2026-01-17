@@ -7,6 +7,19 @@ const PORT = process.env.PORT || 8888;
 
 const app = express();
 
+// CORS middleware
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
+
 // IP-based rate limiting
 const limiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
