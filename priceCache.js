@@ -35,6 +35,21 @@ class PriceCache {
     const normalizedKey = currencyPair.toUpperCase();
     return this.cache.has(normalizedKey);
   }
+
+  getStats() {
+    let pairs = 0;
+    let maxAgeMs = 0;
+    let stalePairs = 0;
+
+    for (const entry of this.cache.values()) {
+      pairs++;
+      const age = Date.now() - entry.timestamp;
+      maxAgeMs = Math.max(maxAgeMs, age);
+      if (age > 60000) stalePairs++;
+    }
+
+    return { pairs, maxAgeMs, stalePairs };
+  }
 }
 
 export default new PriceCache();

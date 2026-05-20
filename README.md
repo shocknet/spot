@@ -98,13 +98,19 @@ Returned when client exceeds rate limit (100 requests per minute per IP).
 GET /health
 ```
 
-**Response:**
+**Response (200 OK)** when polling is active, the last poll succeeded within 90s, and cache data is fresh:
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-01-12T16:45:51.020Z"
+  "healthy": true,
+  "timestamp": "2026-01-12T16:45:51.020Z",
+  "polling": { "active": true, "intervalMs": 2500, "rateLimited": false },
+  "lastPoll": { "at": "2026-01-12T16:45:50.500Z", "ageMs": 520, "success": 9, "failed": 0, "rateLimited": false },
+  "cache": { "pairs": 9, "maxAgeMs": 1200, "stalePairs": 0 }
 }
 ```
+
+**Response (503 Service Unavailable)** when startup has not completed, polls are failing, or cached prices are stale.
 
 ## Configuration
 

@@ -31,9 +31,57 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-// Health check endpoint
+const STALE_POLL_MS = 90_000;
+
+let lastPoll = null;
+
+function getHealthState() {
+  const cache = priceCache.getStats();
+  const polling = {
+    active: isPollingActive,
+    intervalMs: priceFetcher.getCurrentInterval(),
+    rateLimited: priceFetcher.isRateLimited
+  };
+
+  if (!lastPoll) {
+    return {
+      status: 'starting',
+      healthy: false,
+      timestamp: new Date().toISOString(),
+      polling,
+      lastPoll: null,
+      cache
+    };
+  }
+
+  const pollAgeMs = Date.now() - lastPoll.at;
+  const pollFresh = pollAgeMs <= STALE_POLL_MS;
+  const hasData = cache.pairs > 0;
+  const lastPollOk = lastPoll.success > 0;
+  const cacheFresh = cache.stalePairs === 0;
+
+  const healthy = isPollingActive && pollFresh && hasData && lastPollOk && cacheFresh;
+
+  return {
+    status: healthy ? 'ok' : 'degraded',
+    healthy,
+    timestamp: new Date().toISOString(),
+    polling,
+    lastPoll: {
+      at: new Date(lastPoll.at).toISOString(),
+      ageMs: pollAgeMs,
+      success: lastPoll.success,
+      failed: lastPoll.failed,
+      rateLimited: lastPoll.rateLimited
+    },
+    cache
+  };
+}
+
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const health = getHealthState();
+  const statusCode = health.healthy ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 
 // Price endpoint - matches Coinbase format
@@ -65,7 +113,8 @@ async function pollPrices() {
   
   try {
     const summary = await priceFetcher.fetchAllPrices();
-    
+    lastPoll = { at: Date.now(), ...summary };
+
     if (summary.rateLimited) {
       console.warn(`[Poll] Rate limited - ${summary.success} succeeded, ${summary.failed} failed`);
     } else if (summary.failed > 0) {
