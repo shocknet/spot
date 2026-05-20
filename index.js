@@ -118,7 +118,10 @@ async function pollPrices() {
     if (summary.rateLimited) {
       console.warn(`[Poll] Rate limited - ${summary.success} succeeded, ${summary.failed} failed`);
     } else if (summary.failed > 0) {
-      console.warn(`[Poll] ${summary.success} succeeded, ${summary.failed} failed`);
+      const details = summary.failures
+        .map(({ pair, error }) => `${pair} (${error})`)
+        .join(', ');
+      console.warn(`[Poll] ${summary.success} succeeded, ${summary.failed} failed: ${details}`);
     } else {
       console.log(`[Poll] Successfully updated ${summary.success} prices`);
     }

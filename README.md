@@ -18,7 +18,7 @@ A Node.js server that mirrors Bitcoin spot prices from Coinbase API. This servic
 - BTC-EUR (EUR)
 - BTC-CAD (CAD)
 - BTC-BRL (BRL)
-- BTC-MXP (MXP)
+- BTC-MXN (MXN)
 - BTC-GBP (GBP)
 - BTC-CHF (CHF)
 - BTC-JPY (JPY)

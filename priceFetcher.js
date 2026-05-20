@@ -8,7 +8,7 @@ const CURRENCY_PAIRS = [
   'BTC-EUR',
   'BTC-CAD',
   'BTC-BRL',
-  'BTC-MXP',
+  'BTC-MXN',
   'BTC-GBP',
   'BTC-CHF',
   'BTC-JPY',
@@ -82,22 +82,28 @@ class PriceFetcher {
     const summary = {
       success: 0,
       failed: 0,
-      rateLimited: false
+      rateLimited: false,
+      failures: []
     };
 
     results.forEach((result, index) => {
+      const pair = CURRENCY_PAIRS[index];
+
       if (result.status === 'fulfilled') {
         const data = result.value;
         if (data.error === 'rate_limited') {
           summary.rateLimited = true;
           summary.failed++;
+          summary.failures.push({ pair: data.currencyPair, error: data.error });
         } else if (data.success) {
           summary.success++;
         } else {
           summary.failed++;
+          summary.failures.push({ pair: data.currencyPair, error: data.error });
         }
       } else {
         summary.failed++;
+        summary.failures.push({ pair, error: result.reason?.message ?? 'unknown' });
       }
     });
 
