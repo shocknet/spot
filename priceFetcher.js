@@ -1,7 +1,8 @@
 import fetch from 'node-fetch';
 import priceCache from './priceCache.js';
 
-const COINBASE_BASE_URL = 'https://api.coinbase.com/v2/prices';
+const COINBASE_API_URL = 'https://api.coinbase.com/v2';
+const COINBASE_PRICES_URL = `${COINBASE_API_URL}/prices`;
 
 const CURRENCY_PAIRS = [
   'BTC-USD',
@@ -26,9 +27,7 @@ class PriceFetcher {
     this.isRateLimited = false;
   }
 
-  async fetchPrice(currencyPair) {
-    const url = `${COINBASE_BASE_URL}/${currencyPair}/spot`;
-    
+  async fetchFromCoinbase(url, currencyPair) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
@@ -41,38 +40,85 @@ class PriceFetcher {
       });
 
       clearTimeout(timeoutId);
-
-      if (response.status === 429) {
-        this.handleRateLimit();
-        return { currencyPair, error: 'rate_limited' };
-      }
-
-      if (!response.ok) {
-        return { currencyPair, error: `http_${response.status}` };
-      }
-
-      const data = await response.json();
-      
-      if (data && data.data && data.data.amount) {
-        this.handleSuccess();
-        priceCache.set(currencyPair, {
-          amount: data.data.amount,
-          base: data.data.base || 'BTC',
-          currency: data.data.currency
-        });
-        return { currencyPair, success: true };
-      }
-
-      return { currencyPair, error: 'invalid_response' };
+      return { response, error: null };
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error.name === 'AbortError') {
-        return { currencyPair, error: 'timeout' };
+        return { response: null, error: 'timeout' };
       }
-      
-      return { currencyPair, error: error.message };
+
+      return { response: null, error: error.message };
     }
+  }
+
+  cacheSpotPrice(currencyPair, amount, base, currency) {
+    this.handleSuccess();
+    priceCache.set(currencyPair, { amount, base, currency });
+    return { currencyPair, success: true };
+  }
+
+  async fetchBtcJpyFromExchangeRates() {
+    const currencyPair = 'BTC-JPY';
+    const url = `${COINBASE_API_URL}/exchange-rates?currency=BTC`;
+    const { response, error } = await this.fetchFromCoinbase(url, currencyPair);
+
+    if (error) {
+      return { currencyPair, error };
+    }
+
+    if (response.status === 429) {
+      this.handleRateLimit();
+      return { currencyPair, error: 'rate_limited' };
+    }
+
+    if (!response.ok) {
+      return { currencyPair, error: `http_${response.status}` };
+    }
+
+    const data = await response.json();
+    const jpyRate = data?.data?.rates?.JPY;
+
+    if (!jpyRate) {
+      return { currencyPair, error: 'invalid_response' };
+    }
+
+    return this.cacheSpotPrice(currencyPair, jpyRate, 'BTC', 'JPY');
+  }
+
+  async fetchPrice(currencyPair) {
+    if (currencyPair === 'BTC-JPY') {
+      return this.fetchBtcJpyFromExchangeRates();
+    }
+
+    const url = `${COINBASE_PRICES_URL}/${currencyPair}/spot`;
+    const { response, error } = await this.fetchFromCoinbase(url, currencyPair);
+
+    if (error) {
+      return { currencyPair, error };
+    }
+
+    if (response.status === 429) {
+      this.handleRateLimit();
+      return { currencyPair, error: 'rate_limited' };
+    }
+
+    if (!response.ok) {
+      return { currencyPair, error: `http_${response.status}` };
+    }
+
+    const data = await response.json();
+
+    if (data?.data?.amount) {
+      return this.cacheSpotPrice(
+        currencyPair,
+        data.data.amount,
+        data.data.base || 'BTC',
+        data.data.currency
+      );
+    }
+
+    return { currencyPair, error: 'invalid_response' };
   }
 
   async fetchAllPrices() {
